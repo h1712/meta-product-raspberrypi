@@ -13,8 +13,14 @@ continues.
   `lib32-core-image-minimal` built successfully.
 - Next validation is the main `vendor-test-image` target (without the `lib32-`
   prefix); its result is pending.
-- Source changes are being prepared independently in the affected repositories
-  on the `feature/rdke-wrynose` branch.
+- Source changes are committed independently on `feature/rdke-wrynose` in 11
+  affected repositories. Pushes succeeded for `meta-vendor-raspberrypi-dev`,
+  `meta-rdk-oss-reference`, `meta-rdk-halif-headers`,
+  `meta-stack-layering-support`, `rdke-common-config`, and `meta-rdk-bluetooth`.
+- Pushes for `meta-product-raspberrypi`, `meta-oss-vendor-raspberrypi`,
+  `meta-image-support-rdke`, `meta-openembedded`, and `openembedded-core` were
+  rejected with HTTP 403 for the configured remotes; their commits remain local
+  until a writable destination or access is available.
 
 ## Historical build-triage log
 
@@ -473,6 +479,6 @@ These are local build configuration changes, not source-layer PR changes:
   repository independently.
 - This tracker is maintained in `product/meta-product-raspberrypi` as the
   cross-repository index.
-- The planned feature branch is `feature/rdke-wrynose` in each changed
-  repository.
+- Changes are committed to `feature/rdke-wrynose` independently in each
+  affected repository.
 - Update the status and inventory as subsequent BitBake errors are resolved.
