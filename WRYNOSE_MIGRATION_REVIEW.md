@@ -16,6 +16,9 @@ continues.
 - Source changes are committed independently on `feature/rdke-wrynose` in 11
   affected repositories. All 11 feature branches are now pushed: five to
   `rdkcentral` and six to the user's `h1712` forks.
+- The top-level Raspberry Pi manifest and both common/config submanifests are
+  also updated and pushed on `feature/rdke-wrynose`, with pins for all 11
+  changed projects.
 
 ## Historical build-triage log
 
