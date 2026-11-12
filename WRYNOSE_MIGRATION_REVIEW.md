@@ -14,14 +14,8 @@ continues.
 - Next validation is the main `vendor-test-image` target (without the `lib32-`
   prefix); its result is pending.
 - Source changes are committed independently on `feature/rdke-wrynose` in 11
-  affected repositories. Pushes succeeded for `meta-product-raspberrypi`,
-  `meta-vendor-raspberrypi-dev`, `meta-rdk-oss-reference`,
-  `meta-rdk-halif-headers`,
-  `meta-stack-layering-support`, `rdke-common-config`, and `meta-rdk-bluetooth`.
-- Pushes for `meta-oss-vendor-raspberrypi`, `meta-image-support-rdke`,
-  `meta-openembedded`, and `openembedded-core` were rejected with HTTP 403 for
-  the configured remotes; their commits remain local until writable forks or
-  access are available.
+  affected repositories. All 11 feature branches are now pushed: five to
+  `rdkcentral` and six to the user's `h1712` forks.
 
 ## Historical build-triage log
 
