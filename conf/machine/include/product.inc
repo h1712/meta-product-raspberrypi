@@ -1,7 +1,7 @@
 MACHINE = "raspberrypi4-64-rdke"
 TARGET_VENDOR = "-rdk"
-KERNEL_IMAGETYPE= "Image"
-SDKVERSION = "RPI4_BSP_kirkstone_arpi14_6.1"
+KERNEL_IMAGETYPE = "Image"
+SDKVERSION = "RPI4_BSP_wrynose_arpi14_6.1"
 
 ## RPi specific boot-config overrides for RDKV Stack.
 # To enable serial console
@@ -13,24 +13,61 @@ VC4DTBO = "vc4-kms-v3d"
 # Enable CPU boost for performance, ref: https://meta-raspberrypi.readthedocs.io/en/latest/extra-build-config.html
 RPI_EXTRA_CONFIG += "\narm_boost=1\nhdmi_force_hotplug:0=1\nhdmi_force_hotplug:1=0\n"
 
-# This is needed for tmp directory to be named as tmp instead of tmp-glibc
-TCLIBCAPPEND = ""
-
 # Enabling this causes issue from glibc. Refer RDKCentral jira RDKE-13
 #MACHINEOVERRIDES .= ":arm"
 
 # This override is needed for systemd 2.30 patches to get applied. Refer RDKCentral jira RDKE-12
-MACHINEOVERRIDES .= ":kirkstone"
-DISTRO_FEATURES:append = " kirkstone"
+MACHINEOVERRIDES .= ":wrynose"
+DISTRO_FEATURES:append = " wrynose"
+MACHINEOVERRIDES:remove = "kirkstone"
+DISTRO_FEATURES:remove = " kirkstone"
+DISTRO_FEATURES:remove += " ptest"
+# Match XD4's Wrynose baseline and retire the legacy OpenSSL compatibility stack.
+PREFERRED_VERSION_openssl:wrynose = "3.5.7"
+PREFERRED_VERSION_openssl-native:wrynose = "3.5.7"
+PREFERRED_VERSION_nativesdk-openssl:wrynose = "3.5.7"
+PREFERRED_VERSION_gettext-native:wrynose = "1.0"
+PREFERRED_VERSION_tar-native:wrynose = "1.35"
+PREFERRED_VERSION_linux-libc-headers:wrynose = "6.18"
+DISTRO_FEATURES:remove:wrynose = " ssl-1.1.1"
+# Avoid systemd and libcgroup depending on each other's SPDX tasks.
+PACKAGECONFIG:remove:pn-libcgroup = "systemd"
+# Match XD4's Wrynose Breakpad patch set.
+SRC_URI:remove:pn-breakpad = " \
+    file://Set-objects-base-name-as-a-module-name.patch \
+    file://multi-node-header-check-for-build-id_dunfell.patch \
+    file://custom-minidump-id.patch \
+    file://breakpad2_1-processname.patch \
+"
+SRC_URI:remove:pn-breakpad-native = " \
+    file://Set-objects-base-name-as-a-module-name.patch \
+    file://multi-node-header-check-for-build-id_dunfell.patch \
+    file://custom-minidump-id.patch \
+    file://breakpad2_1-processname.patch \
+"
 
 require conf/multilib.conf
 MULTILIBS = "multilib:lib32"
 DEFAULTTUNE:virtclass-multilib-lib32 = "armv7athf-neon-vfpv4"
 
 # Enabling this to solve syslog-ng packaging issue. Refer RDKCentral jira RDKE-14
-DISTRO_FEATURES_BACKFILL_CONSIDERED += "sysvinit"
+DISTRO_FEATURES_OPTED_OUT += "sysvinit"
 VIRTUAL-RUNTIME_init_manager = "systemd"
 VIRTUAL-RUNTIME_initscripts = "systemd-compat-units"
+
+# Follow XD4's Wrynose systemd baseline.
+DISTRO_FEATURES:remove:wrynose = "systemd230"
+PREFERRED_VERSION_systemd:wrynose = "259.5"
+
+# The Android 6.1.77 kernel does not provide these newer Raspberry Pi overlays.
+RPI_KERNEL_DEVICETREE_OVERLAYS:remove:wrynose = " \
+    overlays/bcm2712d0.dtbo \
+    overlays/hifiberry-adc.dtbo \
+    overlays/hifiberry-adc8x.dtbo \
+    overlays/vc4-kms-dsi-ili9881-5inch.dtbo \
+    overlays/vc4-kms-dsi-ili9881-7inch.dtbo \
+    overlays/w1-gpio-pi5.dtbo \
+"
 
 # Middleware layer requirements.
 DOBBY_DEVICESETTINGS_FILE = "dobby.generic.json"
@@ -43,13 +80,16 @@ DISTRO_FEATURES:remove = " rdk_svp"
 DISTRO_FEATURES:append = " enable_icrypto_openssl"
 
 # RDK-52444: Temporarily remove the SECUIRTY_CFLAGS -fstackprotector and fortify source 
-SECURITY_CFLAGS:remove = " -fstack-protector -D_FORTIFY_SOURCE=2 -Wformat -Wformat-security -Wno-error=format-security -Wno-error=unused-result"
+SECURITY_CFLAGS:remove = " -fstack-protector -D_FORTIFY_SOURCE=2 -Wformat -Wformat-security -Werror=format-security -Wno-error=format-security -Wno-error=unused-result"
 SECURITY_LDFLAGS:remove = " -fstack-protector"
+# The bootstrap sysroot has no libc headers; avoid a dangling format-security error flag in configure probes.
+SECURITY_STRINGFORMAT:pn-libgcc-initial = ""
+SECURITY_STRINGFORMAT:pn-libgcc = ""
 
 #Setting default build variant as debug.
 BUILD_VARIANT ?= "debug"
 
-OPENCDM_DRMS=""
+OPENCDM_DRMS = ""
 
 # Setting dri card interface for the device
 DRI_DEVICE_NAME = "/dev/dri/card1"
