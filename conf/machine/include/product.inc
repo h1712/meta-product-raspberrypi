@@ -22,6 +22,8 @@ DISTRO_FEATURES:append = " wrynose"
 MACHINEOVERRIDES:remove = "kirkstone"
 DISTRO_FEATURES:remove = " kirkstone"
 DISTRO_FEATURES:remove += " ptest"
+# Accept the Raspberry Pi Synaptics firmware license required by the Wi-Fi package.
+LICENSE_FLAGS_ACCEPTED:append = " synaptics-killswitch"
 # Match XD4's Wrynose baseline and retire the legacy OpenSSL compatibility stack.
 PREFERRED_VERSION_openssl:wrynose = "3.5.7"
 PREFERRED_VERSION_openssl-native:wrynose = "3.5.7"

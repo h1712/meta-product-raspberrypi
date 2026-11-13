@@ -11,12 +11,10 @@ continues.
 
 - The user confirmed both `core-image-minimal` and
   `lib32-core-image-minimal` built successfully.
-- The `lib32-vendor-test-image` dependency resolution currently fails because
-  BitBake still selected legacy `librsvg` 2.40.21, which requires `libcroco`
-  absent from the active Wrynose layers. Removed the old vendor PV override and
-  stale packagegroup entry, then explicitly preferred OE-Core `librsvg`
-  2.61.3 so layer priority cannot select the obsolete recipe. The target needs
-  to be retried to validate the correction.
+- The latest `lib32-vendor-test-image` dependency resolution reaches the
+  Raspberry Pi Wi-Fi firmware but rejects its `synaptics-killswitch` license
+  flag. The product configuration now accepts that flag specifically for the
+  RDKE Raspberry Pi build; retry the target to validate.
 - Source changes are committed independently on `feature/rdke-wrynose` in 11
   affected repositories. All 11 feature branches are now pushed: five to
   `rdkcentral` and six to the user's `h1712` forks.
@@ -167,7 +165,9 @@ the current build status above supersedes their interim status statements.
   requires `libcroco`, which is not provided by the Wrynose layer set. Removed
   the packagegroup's obsolete direct `libcroco` dependency and explicitly set
   `PREFERRED_VERSION_librsvg = "2.61.3"` to select OE-Core's compatible recipe.
-  Retry the target to verify.
+  The latest build advanced past that dependency and stopped because the
+  Raspberry Pi Wi-Fi firmware's `synaptics-killswitch` license flag was not
+  accepted. Accepted the flag in the product machine configuration only.
   The subsequent kernel-module build found another GCC 15 error in Btrfs:
   `kvcalloc()` arguments were reversed in `send.c`. Added a narrow kernel patch
   to pass element count before element size.
@@ -290,6 +290,9 @@ the current build status above supersedes their interim status statements.
   configurations, explicitly preferred OE-Core `librsvg` 2.61.3 to win over
   the high-priority legacy recipe, and removed the unavailable `libcroco`
   package from the OSS packagegroup.
+- Accepted the Raspberry Pi Wi-Fi firmware's `synaptics-killswitch` license
+  flag only in the RDKE Raspberry Pi product configuration, enabling the
+  firmware dependency required by the platform packagegroup.
 - Restored missing Breakpad and dnsmasq source assets referenced by recipes.
 - Removed invalid runtime `RPROVIDES` aliases containing `virtual/` and updated
   affected package dependencies.
