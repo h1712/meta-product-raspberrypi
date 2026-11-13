@@ -1,18 +1,21 @@
 # Raspberry Pi RDKE Wrynose Migration Review
 
-Last updated: 2026-11-11
+Last updated: 2026-11-13
 
 This is the cross-repository review tracker for the Raspberry Pi RDKE migration
 to Yocto Wrynose. The layers below are separate Git repositories, so PRs should
 be prepared per repository. Keep this inventory updated as build triage
 continues.
 
-## Current status (2026-11-12)
+## Current status (2026-11-13)
 
 - The user confirmed both `core-image-minimal` and
   `lib32-core-image-minimal` built successfully.
-- Next validation is the main `vendor-test-image` target (without the `lib32-`
-  prefix); its result is pending.
+- The `lib32-vendor-test-image` dependency resolution currently fails because
+  the legacy `librsvg` 2.40.21 pin requires `libcroco`, which has no recipe in
+  the active Wrynose layers. Removed the legacy version pins and stale direct
+  `libcroco` packagegroup entry so OE-Core's Wrynose `librsvg` 2.61.3 is used.
+  The target needs to be retried to validate the correction.
 - Source changes are committed independently on `feature/rdke-wrynose` in 11
   affected repositories. All 11 feature branches are now pushed: five to
   `rdkcentral` and six to the user's `h1712` forks.
@@ -158,6 +161,11 @@ the current build status above supersedes their interim status statements.
   zero-argument declarations by the newer compiler. The existing disable
   options were placed in `EXTRA_OECONF`, which Perl's custom configure task
   does not consume; pass them via `PACKAGECONFIG_CONFARGS` instead.
+  The next `lib32-vendor-test-image` parse failed because the vendor and OSS
+  layers pinned `librsvg` to 2.40.21, which depends on `libcroco`; no libcroco
+  recipe is present in the active Wrynose layers. Removed both old-version
+  pins and the packagegroup's obsolete direct `libcroco` dependency, allowing
+  OE-Core's `librsvg` 2.61.3 to be selected. Retry the target to verify.
   The subsequent kernel-module build found another GCC 15 error in Btrfs:
   `kvcalloc()` arguments were reversed in `send.c`. Added a narrow kernel patch
   to pass element count before element size.
@@ -276,6 +284,9 @@ the current build status above supersedes their interim status statements.
 - Disabled Perl's NDBM/DBM detection through `PACKAGECONFIG_CONFARGS`, which
   Perl's custom configure task actually uses, avoiding the incompatible
   `NDBM_File` build against GDBM 1.8.3 headers.
+- Removed the legacy `librsvg` 2.40.21 pins from the OSS and vendor
+  configurations and removed the unavailable `libcroco` package from the OSS
+  packagegroup; Wrynose's OE-Core `librsvg` 2.61.3 no longer needs it.
 - Restored missing Breakpad and dnsmasq source assets referenced by recipes.
 - Removed invalid runtime `RPROVIDES` aliases containing `virtual/` and updated
   affected package dependencies.
@@ -307,6 +318,7 @@ Wrynose recipe/layer compatibility, package-provider corrections, AppArmor
 source revision format, and local build-template updates.
 
 - `conf/layer.conf`
+- `conf/include/vendor_pkg_versions.inc`
 - `conf/machine/include/vendor.inc`
 - `conf/template/local.conf.sample`
 - `conf/templates/rdke/local.conf.sample` (new)
@@ -354,6 +366,7 @@ Wrynose recipe/fetcher updates, package and license compatibility, restored
 Breakpad/dnsmasq assets, and the `kbd` package split correction.
 
 - `conf/layer.conf`
+- `conf/include/package_revisions_oss.inc`
 - `recipes-common/lighttpd/lighttpd_%.bbappend`
 - `recipes-common/lighttpd/lighttpd_1.4.53.bbappend`
 - `recipes-connectivity/networkmanager/networkmanager_1.43.7.bb`
