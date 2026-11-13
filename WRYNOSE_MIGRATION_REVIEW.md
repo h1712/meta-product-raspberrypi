@@ -51,6 +51,13 @@ continues.
   `auto`, and made the Mesa 22.0.3 append replace both incompatible upstream
   patch hunks. The adapted Gallivm patch applies without fuzz; retry
   `lib32-mesa:do_patch` and the image build.
+- The Mesa retry then failed the second Freedreno hunk because the prior
+  unsuccessful patch attempt left its work directory partially modified. Both
+  Mesa 22.0.3 patches apply cleanly to pristine source; clean `lib32-mesa`'s
+  work directory before retrying. Fontconfig 2.17.1 also exposed stale context
+  in the cache-mtime patch. Added a version-specific refreshed patch, retained
+  the legacy patch for other Fontconfig versions, and fixed the `FILES:remove`
+  operator warning.
 - Source changes are committed independently on `feature/rdke-wrynose` in 11
   affected repositories. All 11 feature branches are now pushed: five to
   `rdkcentral` and six to the user's `h1712` forks.
