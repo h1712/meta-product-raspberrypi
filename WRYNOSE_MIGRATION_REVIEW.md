@@ -17,7 +17,9 @@ continues.
   RDKE Raspberry Pi build. The subsequent gobject-introspection-native
   configure failed because it found GLib 2.74.6, below its 2.82 minimum. The
   product now prefers OE-Core GLib 2.88.2 for native tools only; retry the
-  target to validate.
+  target to validate. The next run failed unpacking Vulkan headers and loader:
+  Wrynose rejects explicit `S = "${UNPACKDIR}/git"` overrides. Removed these
+  obsolete assignments from the Vulkan recipes and appends; retry to validate.
 - Source changes are committed independently on `feature/rdke-wrynose` in 11
   affected repositories. All 11 feature branches are now pushed: five to
   `rdkcentral` and six to the user's `h1712` forks.
@@ -174,7 +176,11 @@ the current build status above supersedes their interim status statements.
   The following run failed configuring `gobject-introspection-native` 1.86.0:
   it found the RDK GLib 2.74.6, while this release requires GLib >=2.82.0.
   Prefer OE-Core GLib 2.88.2 for the native variant only, leaving target GLib
-  unchanged.
+  unchanged. The next run failed unpacking lib32 Vulkan headers and loader
+  because legacy Vulkan recipe appends explicitly set `S` to
+  `${UNPACKDIR}/git`. Removed those assignments from the affected Vulkan
+  appends and the related Volk recipe so OE-Core's default source directory is
+  used.
   The subsequent kernel-module build found another GCC 15 error in Btrfs:
   `kvcalloc()` arguments were reversed in `send.c`. Added a narrow kernel patch
   to pass element count before element size.
@@ -303,6 +309,9 @@ the current build status above supersedes their interim status statements.
 - Preferred OE-Core GLib 2.88.2 for native tools on Wrynose because
   `gobject-introspection-native` 1.86.0 requires GLib >=2.82.0; the RDK target
   GLib version remains unchanged.
+- Removed obsolete `S = "${UNPACKDIR}/git"` assignments from the Vulkan
+  headers, loader, tools, Volk, validation-layers, and utility-libraries
+  metadata so BitBake Wrynose uses its default Git source directory.
 - Restored missing Breakpad and dnsmasq source assets referenced by recipes.
 - Removed invalid runtime `RPROVIDES` aliases containing `virtual/` and updated
   affected package dependencies.
