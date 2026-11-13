@@ -12,10 +12,11 @@ continues.
 - The user confirmed both `core-image-minimal` and
   `lib32-core-image-minimal` built successfully.
 - The `lib32-vendor-test-image` dependency resolution currently fails because
-  the legacy `librsvg` 2.40.21 pin requires `libcroco`, which has no recipe in
-  the active Wrynose layers. Removed the legacy version pins and stale direct
-  `libcroco` packagegroup entry so OE-Core's Wrynose `librsvg` 2.61.3 is used.
-  The target needs to be retried to validate the correction.
+  BitBake still selected legacy `librsvg` 2.40.21, which requires `libcroco`
+  absent from the active Wrynose layers. Removed the old vendor PV override and
+  stale packagegroup entry, then explicitly preferred OE-Core `librsvg`
+  2.61.3 so layer priority cannot select the obsolete recipe. The target needs
+  to be retried to validate the correction.
 - Source changes are committed independently on `feature/rdke-wrynose` in 11
   affected repositories. All 11 feature branches are now pushed: five to
   `rdkcentral` and six to the user's `h1712` forks.
@@ -161,11 +162,12 @@ the current build status above supersedes their interim status statements.
   zero-argument declarations by the newer compiler. The existing disable
   options were placed in `EXTRA_OECONF`, which Perl's custom configure task
   does not consume; pass them via `PACKAGECONFIG_CONFARGS` instead.
-  The next `lib32-vendor-test-image` parse failed because the vendor and OSS
-  layers pinned `librsvg` to 2.40.21, which depends on `libcroco`; no libcroco
-  recipe is present in the active Wrynose layers. Removed both old-version
-  pins and the packagegroup's obsolete direct `libcroco` dependency, allowing
-  OE-Core's `librsvg` 2.61.3 to be selected. Retry the target to verify.
+  The `lib32-vendor-test-image` parse still selected the RDK OSS
+  `librsvg_2.40.21.bb` after the legacy PV overrides were removed; that recipe
+  requires `libcroco`, which is not provided by the Wrynose layer set. Removed
+  the packagegroup's obsolete direct `libcroco` dependency and explicitly set
+  `PREFERRED_VERSION_librsvg = "2.61.3"` to select OE-Core's compatible recipe.
+  Retry the target to verify.
   The subsequent kernel-module build found another GCC 15 error in Btrfs:
   `kvcalloc()` arguments were reversed in `send.c`. Added a narrow kernel patch
   to pass element count before element size.
@@ -285,8 +287,9 @@ the current build status above supersedes their interim status statements.
   Perl's custom configure task actually uses, avoiding the incompatible
   `NDBM_File` build against GDBM 1.8.3 headers.
 - Removed the legacy `librsvg` 2.40.21 pins from the OSS and vendor
-  configurations and removed the unavailable `libcroco` package from the OSS
-  packagegroup; Wrynose's OE-Core `librsvg` 2.61.3 no longer needs it.
+  configurations, explicitly preferred OE-Core `librsvg` 2.61.3 to win over
+  the high-priority legacy recipe, and removed the unavailable `libcroco`
+  package from the OSS packagegroup.
 - Restored missing Breakpad and dnsmasq source assets referenced by recipes.
 - Removed invalid runtime `RPROVIDES` aliases containing `virtual/` and updated
   affected package dependencies.
