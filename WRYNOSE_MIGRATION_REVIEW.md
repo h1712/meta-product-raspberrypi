@@ -24,6 +24,27 @@ continues.
   Mesa fetch. Refreshed the Breakpad patch to remove redundant descriptor
   closes and test-only code, and added the verified Mesa 22.0.3 checksum for
   the vendor version pin; retry both tasks to validate.
+- The next Mesa run failed applying OE-Core's Freedreno build-path patch:
+  its hunk targets a newer Mesa source layout than the vendor-pinned 22.0.3.
+  Added a version-specific append and patch that preserves the absolute path
+  for build-time generators while keeping it out of the compiled runtime path.
+  The refreshed patch applies cleanly without fuzz; retry `lib32-mesa:do_patch`
+  and the image build to validate.
+- The subsequent `spirv-headers-native:do_configure` failure came from the
+  shared recipe include setting `S` with `${PN}`, which adds `-native` even
+  though unpack names the source directory with `${BPN}`. Updated the include
+  to use `${BPN}`; retry the image build to validate.
+- The subsequent `rust-llvm-native:do_patch` failure could not resolve the
+  `llvm-config.cpp` target for the Yocto environment override patch. Normalized
+  the patch paths relative to the recipe's LLVM source directory and set its
+  strip level to `1`; retry to validate.
+- The latest build exposed two remaining source-path mismatches. SPIR-V Tools
+  used `${PN}` and incorrectly included `-native` in its unpack directory;
+  switched both SPIR-V shared includes to `${BPN}`. Rust 1.72 still pointed at
+  `${WORKDIR}` instead of Wrynose's `${UNPACKDIR}`. Updated `RUSTSRC` and
+  retained the LLVM patch's corrected relative path/strip level. Verified the
+  Rust patch applies to the actual unpacked LLVM source without fuzz; retry the
+  two failed tasks and image build.
 - Source changes are committed independently on `feature/rdke-wrynose` in 11
   affected repositories. All 11 feature branches are now pushed: five to
   `rdkcentral` and six to the user's `h1712` forks.
@@ -230,6 +251,8 @@ the current build status above supersedes their interim status statements.
   retaining EOF handling without patch fuzz.
 - Added the Mesa 22.0.3 archive checksum to the Raspberry Pi vendor layer;
   the Wrynose base checksum applies to Mesa 26.0.5, not the vendor pin.
+- Replaced the generic Mesa append with a 22.0.3-specific append and source-
+  compatible Freedreno path patch, keeping the OE-Core Mesa 26 patch unchanged.
 - Updated Breakpad's secondary Git `destsuffix` values to
   `${BB_GIT_DEFAULT_DESTSUFFIX}`, keeping test, protobuf, and LSS sources under
   the default `${S}` tree.
