@@ -45,6 +45,12 @@ continues.
   retained the LLVM patch's corrected relative path/strip level. Verified the
   Rust patch applies to the actual unpacked LLVM source without fuzz; retry the
   two failed tasks and image build.
+- The next Mesa 22.0.3 patch failure was the LLVM 22 Gallivm iterator fix:
+  upstream's hunk uses a qualified type, while this older source uses the
+  unqualified `StringMapIterator`. Added a version-specific adaptation using
+  `auto`, and made the Mesa 22.0.3 append replace both incompatible upstream
+  patch hunks. The adapted Gallivm patch applies without fuzz; retry
+  `lib32-mesa:do_patch` and the image build.
 - Source changes are committed independently on `feature/rdke-wrynose` in 11
   affected repositories. All 11 feature branches are now pushed: five to
   `rdkcentral` and six to the user's `h1712` forks.
