@@ -20,6 +20,10 @@ continues.
   target to validate. The next run failed unpacking Vulkan headers and loader:
   Wrynose rejects explicit `S = "${UNPACKDIR}/git"` overrides. Removed these
   obsolete assignments from the Vulkan recipes and appends; retry to validate.
+- The latest `lib32-vendor-test-image` run failed Breakpad patch-fuzz QA and
+  Mesa fetch. Refreshed the Breakpad patch to remove redundant descriptor
+  closes and test-only code, and added the verified Mesa 22.0.3 checksum for
+  the vendor version pin; retry both tasks to validate.
 - Source changes are committed independently on `feature/rdke-wrynose` in 11
   affected repositories. All 11 feature branches are now pushed: five to
   `rdkcentral` and six to the user's `h1712` forks.
@@ -181,6 +185,12 @@ the current build status above supersedes their interim status statements.
   `${UNPACKDIR}/git`. Removed those assignments from the affected Vulkan
   appends and the related Volk recipe so OE-Core's default source directory is
   used.
+  The latest lib32 run then found a Breakpad `patch-fuzz` QA failure and Mesa
+  checksum mismatch: the Wrynose OE-Core checksum was for Mesa 26.0.5 even
+  though the vendor layer pins Mesa to 22.0.3. Removed redundant descriptor
+  closes and test-only code from the Breakpad fix, retaining its EOF read
+  handling with clean patch context. Added the Mesa 22.0.3 checksum confirmed
+  by OE-Core's kirkstone recipe and the downloaded official archive.
   The subsequent kernel-module build found another GCC 15 error in Btrfs:
   `kvcalloc()` arguments were reversed in `send.c`. Added a narrow kernel patch
   to pass element count before element size.
@@ -215,6 +225,11 @@ the current build status above supersedes their interim status statements.
   valid `Pending` value required by current patch QA.
 - Removed the obsolete `S = "${UNPACKDIR}/git"` assignment from shared Breakpad
   metadata so Wrynose uses OE-Core's default source directory.
+- Refreshed Breakpad's child-hang patch for current source context, removing
+  duplicate descriptor closes and its disabled test-only kill block while
+  retaining EOF handling without patch fuzz.
+- Added the Mesa 22.0.3 archive checksum to the Raspberry Pi vendor layer;
+  the Wrynose base checksum applies to Mesa 26.0.5, not the vendor pin.
 - Updated Breakpad's secondary Git `destsuffix` values to
   `${BB_GIT_DEFAULT_DESTSUFFIX}`, keeping test, protobuf, and LSS sources under
   the default `${S}` tree.
