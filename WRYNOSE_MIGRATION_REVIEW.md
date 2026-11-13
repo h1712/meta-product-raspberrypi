@@ -14,7 +14,10 @@ continues.
 - The latest `lib32-vendor-test-image` dependency resolution reaches the
   Raspberry Pi Wi-Fi firmware but rejects its `synaptics-killswitch` license
   flag. The product configuration now accepts that flag specifically for the
-  RDKE Raspberry Pi build; retry the target to validate.
+  RDKE Raspberry Pi build. The subsequent gobject-introspection-native
+  configure failed because it found GLib 2.74.6, below its 2.82 minimum. The
+  product now prefers OE-Core GLib 2.88.2 for native tools only; retry the
+  target to validate.
 - Source changes are committed independently on `feature/rdke-wrynose` in 11
   affected repositories. All 11 feature branches are now pushed: five to
   `rdkcentral` and six to the user's `h1712` forks.
@@ -168,6 +171,10 @@ the current build status above supersedes their interim status statements.
   The latest build advanced past that dependency and stopped because the
   Raspberry Pi Wi-Fi firmware's `synaptics-killswitch` license flag was not
   accepted. Accepted the flag in the product machine configuration only.
+  The following run failed configuring `gobject-introspection-native` 1.86.0:
+  it found the RDK GLib 2.74.6, while this release requires GLib >=2.82.0.
+  Prefer OE-Core GLib 2.88.2 for the native variant only, leaving target GLib
+  unchanged.
   The subsequent kernel-module build found another GCC 15 error in Btrfs:
   `kvcalloc()` arguments were reversed in `send.c`. Added a narrow kernel patch
   to pass element count before element size.
@@ -293,6 +300,9 @@ the current build status above supersedes their interim status statements.
 - Accepted the Raspberry Pi Wi-Fi firmware's `synaptics-killswitch` license
   flag only in the RDKE Raspberry Pi product configuration, enabling the
   firmware dependency required by the platform packagegroup.
+- Preferred OE-Core GLib 2.88.2 for native tools on Wrynose because
+  `gobject-introspection-native` 1.86.0 requires GLib >=2.82.0; the RDK target
+  GLib version remains unchanged.
 - Restored missing Breakpad and dnsmasq source assets referenced by recipes.
 - Removed invalid runtime `RPROVIDES` aliases containing `virtual/` and updated
   affected package dependencies.
