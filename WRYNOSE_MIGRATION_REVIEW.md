@@ -1,16 +1,39 @@
 # Raspberry Pi RDKE Wrynose Migration Review
 
-Last updated: 2026-11-13
+Last updated: 2026-11-17
 
 This is the cross-repository review tracker for the Raspberry Pi RDKE migration
 to Yocto Wrynose. The layers below are separate Git repositories, so PRs should
 be prepared per repository. Keep this inventory updated as build triage
 continues.
 
-## Current status (2026-11-13)
+## Current status (2026-11-17)
 
 - The user confirmed both `core-image-minimal` and
   `lib32-core-image-minimal` built successfully.
+- The latest `lib32-vendor-test-image` build failed fetching mpg123 after the
+  vendor PV pin to 1.29.3 retained OE-Core's 1.33.4 checksum. The upstream
+  1.29.3 archive downloaded successfully and its SHA-256 was verified against
+  the fetched archive; added a PV-scoped checksum override for 1.29.3. Retry
+  `lib32-mpg123:do_fetch` to validate.
+- The subsequent `lib32-mpg123:do_compile` failed because mpg123 1.29.3 uses
+  old-style signal-handler function pointer types incompatible with POSIX
+  `sigaction`. Added a version-scoped patch aligning the wrapper and callbacks
+  with `void (*)(int)`; the patch dry-run applies cleanly. Retry
+  `lib32-mpg123:do_compile` to validate.
+- The latest `lib32-essos:do_compile` failed because 32-bit `_TIME_BITS=64`
+  removes the `time` member from `struct input_event` in Wrynose's Linux input
+  headers. Updated Essos to use the header's `input_event_sec` and
+  `input_event_usec` compatibility macros. The patch dry-run applies to Essos
+  2.1.2 and both macros are present in its recipe sysroot; retry compile.
+- The latest `lib32-assimp:do_configure` failed because CMake 4 rejects
+  Assimp 5.0.1's top-level minimum version of 2.8. Added
+  `CMAKE_POLICY_VERSION_MINIMUM=3.5` to the recipe's CMake arguments, following
+  the diagnostic's suggested compatibility setting; retry configure.
+- The latest `lib32-westeros:do_configure` failed because the recipe formed
+  its source directory from `${PN}`, which expands to `lib32-westeros` for
+  multilib. Changed `S` to use `${BPN}` so it resolves the unpacked
+  `westeros-2.1.4` source directory; retry the configure task to validate.
 - The latest `lib32-vendor-test-image` dependency resolution reaches the
   Raspberry Pi Wi-Fi firmware but rejects its `synaptics-killswitch` license
   flag. The product configuration now accepts that flag specifically for the
@@ -26,10 +49,12 @@ continues.
   the vendor version pin; retry both tasks to validate.
 - The next Mesa run failed applying OE-Core's Freedreno build-path patch:
   its hunk targets a newer Mesa source layout than the vendor-pinned 22.0.3.
-  Added a version-specific append and patch that preserves the absolute path
-  for build-time generators while keeping it out of the compiled runtime path.
-  The refreshed patch applies cleanly without fuzz; retry `lib32-mesa:do_patch`
-  and the image build to validate.
+  The XD4 reference carries the same newer patch; no matching BPI counterpart
+  was found in the checked layers. Adapted the shared patch with version-neutral
+  context, preserving the absolute path for build-time generators while
+  removing it from runtime `RNN_PATH`. A dry-run against pristine Mesa 22.0.3
+  applies without fuzz. Also replaced the deprecated `FILES:${PN}:remove +=`
+  assignments; retry `lib32-mesa:do_patch` and the image build to validate.
 - The subsequent `spirv-headers-native:do_configure` failure came from the
   shared recipe include setting `S` with `${PN}`, which adds `-native` even
   though unpack names the source directory with `${BPN}`. Updated the include
@@ -38,6 +63,17 @@ continues.
   `llvm-config.cpp` target for the Yocto environment override patch. Normalized
   the patch paths relative to the recipe's LLVM source directory and set its
   strip level to `1`; retry to validate.
+- The latest build failed `fontconfig:do_patch` during patch QA because the
+  cache-mtime patches used invalid `Upstream-Status: Appropriate` metadata.
+  Changed both to `Pending`. `glslang-native:do_compile` also exposed
+  a Vulkan SDK mismatch: glslang 1.4.341.0 compiled against SPIRV-Tools 1.3.260.
+  Prefer matching SPIRV-Headers and SPIRV-Tools 1.4.341.0 for Wrynose, both
+  native and target; retry the tasks to validate.
+- The latest `dbus-native:do_install` failed because the shared dbus append
+  unconditionally edits `${sysconfdir}/dbus-1/system.conf`, which native D-Bus
+  does not install at that path. Restricted the system-config edit to the
+  target variant. The XD4 reference has the same unscoped edit; consider
+  carrying this class-specific fix there too.
 - The latest build exposed two remaining source-path mismatches. SPIR-V Tools
   used `${PN}` and incorrectly included `-native` in its unpack directory;
   switched both SPIR-V shared includes to `${BPN}`. Rust 1.72 still pointed at
@@ -51,10 +87,12 @@ continues.
   `auto`, and made the Mesa 22.0.3 append replace both incompatible upstream
   patch hunks. The adapted Gallivm patch applies without fuzz; retry
   `lib32-mesa:do_patch` and the image build.
-- The Mesa retry then failed the second Freedreno hunk because the prior
-  unsuccessful patch attempt left its work directory partially modified. Both
-  Mesa 22.0.3 patches apply cleanly to pristine source; clean `lib32-mesa`'s
-  work directory before retrying. Fontconfig 2.17.1 also exposed stale context
+- The Mesa retry still failed because the vendor append's `SRC_URI:remove`
+  spelled the OE-Core patch filename with an apostrophe (`don\'t`), while the
+  actual filename uses a hyphen (`don-t`). The generic patch was therefore
+  applied before its Mesa 22.0.3 replacement. Corrected the removal name;
+  clean `lib32-mesa`'s work directory before retrying to clear the partial
+  patch state. Fontconfig 2.17.1 also exposed stale context
   in the cache-mtime patch. Added a version-specific refreshed patch, retained
   the legacy patch for other Fontconfig versions, and fixed the `FILES:remove`
   operator warning.
@@ -64,6 +102,247 @@ continues.
 - The top-level Raspberry Pi manifest and both common/config submanifests are
   also updated and pushed on `feature/rdke-wrynose`, with pins for all 11
   changed projects.
+- The latest image build exposed three new issues. PulseAudio was pinned to
+  15.0 while inheriting the 17.0 recipe checksum; verified the official 15.0
+  archive and added its checksum conditionally. Removed the duplicate
+  `wayland-protocols-dev` package declaration while retaining its pkg-config
+  file assignment. Mesa 22.0.3's bundled C11 threads header also conflicted
+  with glibc 2.43's `once_flag` declarations; added a Mesa-version-scoped
+  compatibility patch. Rerun the affected fetch, package, and compile tasks
+  to validate.
+- The new `lib32-pulseaudio:do_package` failure had two causes: PulseAudio's
+  modules install under a versioned `pulse-${PV major.minor}/modules`
+  directory, while the recipe split packages from the unversioned
+  `pulseaudio/modules` path; and the ALSA mixer data FILES rule only named the
+  directory. Updated module splitting to use the versioned directory and
+  matched the mixer path/profile files. The existing conditional GSettings
+  package already claims its helper/schema files. Confirmed the configured
+  module and data patterns match the installed files; rerun `do_package` to
+  validate BitBake packaging.
+- The new ALSA plugins fetch failure is specific to the vendor-pinned 1.2.6
+  archive. Verified the upstream download SHA-256 is
+  `068818a4b55d8c029daa00015d853d45113f56b224b7c64e1e117988c825b2a0`; made
+  the checksum conditional on PV while preserving the OE-Core 1.2.12 checksum.
+  FFmpeg's 4.2.2 append also listed `avutil` as a PACKAGECONFIG even though it
+  is always built and has no PACKAGECONFIG declaration; removed that invalid
+  token. Rerun the ALSA fetch and FFmpeg configure tasks.
+- The latest build also failed compiling the pinned BlueZ 5.48 vendor restore
+  patch because it called `sendfile()` without including its declaration;
+  added `<sys/sendfile.h>`. `cargo-native` failed its Rust compiler probe
+  because the native Rust target spec (`x86_64-linux.json`) is staged under
+  `${STAGING_LIBDIR_NATIVE}/rustlib`, outside Cargo's task-local target search
+  path. Added that directory to `RUST_TARGET_PATH` for native Cargo builds;
+  rerun both compile tasks to validate.
+- The subsequent BlueZ 5.48 compile passed `src/shared/shell.c` after selecting
+  Readline's stdarg declaration but failed at the same `rl_message()` call in
+  `tools/btmgmt.c`. Extended the BlueZ compatibility patch to select the
+  variadic declaration before that file's Readline include too; rerun compile.
+- The latest build failed `lib32-libstd-rs:do_compile` because the staged
+  `cargo-native` binary needs `libssh2.so.1`, which is present in the native
+  recipe sysroot but not on the runtime loader path. Added the native library
+  directory to the libstd compile environment. `lib32-cairo:do_package` also
+  failed the no-GPLv3 policy because Cairo's default `trace` option packages
+  GPLv3 tools and marks related packages incompatible; disabled tracing,
+  removed its now-unused perf-utils package, and assigned the remaining
+  staticdev/locale packages their actual permissive Cairo license. Rerun both
+  tasks to validate.
+- The subsequent libstd compile reached Cargo but its rustc target probe could
+  not find `x86_64-linux.json`: `rust.inc` sets `RUST_TARGET_PATH` to the
+  recipe-local targets directory, overriding the native spec path used by
+  cargo-native. Appended `${STAGING_LIBDIR_NATIVE}/rustlib` for libstd builds
+  so Cargo/rustc can resolve the staged host target spec; rerun compile.
+- The newest compile still reports rustc cannot resolve `x86_64-linux` despite
+  the target spec directory being present in `RUST_TARGET_PATH`. The spec file
+  and direct rustc probe both work in the mirrored sysroot; Cargo's rustc probe
+  also succeeds when rustc is launched through the uninative loader, so the
+  remaining difference is the configured task's child-process environment or
+  loader. The Cargo class now logs the selected `rustc` path to help compare the
+  next task run; avoid adding another target-path workaround until the child
+  environment is identified. BlueZ's `uhid_destroy()` forward declaration and
+  file-local helper are verified by a zero-fuzz dry-run against the preserved
+  pre-patch source.
+- The new `cargo-c-native:do_compile` failure is caused by `cargo` loading
+  `libssh2.so.1` from its native recipe sysroot without that sysroot's library
+  directory on `LD_LIBRARY_PATH`. Added a native library-path prepend to the
+  shared Cargo build function, removing the duplicate libstd-specific setup.
+  Verified staged Cargo starts through the uninative loader with this path.
+  Rerun both `cargo-c-native:do_compile` and `lib32-libstd-rs:do_compile`;
+  libstd's target-spec lookup remains unresolved.
+- The latest `lib32-nghttp2:do_configure` failure comes from nghttp2 1.48.0's
+  old CMake minimum-version declaration, rejected by CMake 4; set
+  `CMAKE_POLICY_VERSION_MINIMUM=3.5` in that version's recipe. Cairo's
+  `do_package` failed because multilib script renaming still expected
+  `cairo-trace` after the GPLv3 trace option was disabled and the executable
+  removed. The prior package removal used `${PN}-perf-utils`, but the recipe
+  declares the package literally as `cairo-perf-utils`; remove that literal
+  package so multilib cannot rename or package it. The Assimp unpack warning
+  also identifies an `${PN}` multilib path mismatch; use `${BPN}` in `S` to
+  match the unpacked `assimp-${PV}` directory. Rerun these tasks to validate.
+- The latest libstd compile still cannot find the native `x86_64-linux` target
+  spec, and the same host-target probe now fails for `cargo-c-native`. Both
+  recipes generate only the canonical `x86_64-unknown-linux-gnu` target in
+  their task-local `rust-targets` directory, while the installed rustc reports
+  its host as `x86_64-linux`. Cargo first queries rustc for that host without a
+  `--target` argument. Stage the native sysroot's `${BUILD_SYS}.json` into the
+  task-local target directory in the shared Cargo build function, so the host
+  target can be resolved across Cargo recipes; remove the libstd-only path
+  append. The generated non-host target JSON also encoded pointer and C-int
+  widths as numbers, but Rust 1.72 expects strings for these fields. Preserve
+  their string values in `rust-target-config.bbclass`; a direct rustc check
+  now resolves the host spec and parses the ARM target spec. Also corrected
+  Cairo's package removal to match the literal `cairo-perf-utils` entry and
+  changed Assimp's source path to `${BPN}` for multilib. Rerun the affected
+  Cargo, Cairo, and Assimp tasks to validate.
+- The latest `gstreamer1.0-plugins-base:do_patch` passed patch application but
+  failed patch-status QA for the Amlogic Opus clipping behavior patch. Marked
+  it `Inappropriate` as vendor-specific; rerun the patch task to validate QA.
+- The latest build's two HAL header unpack tasks failed Wrynose QA because
+  their recipes explicitly set `S` to `${UNPACKDIR}/git`; removed the obsolete
+  assignments and rely on BitBake's default `S`. Cargo advanced past the target
+  lookup after adding the staged Rust target-spec directory, but then failed
+  because its canonical Rust triple has no staged standard library. Native Rust
+  libraries are installed for `${BUILD_SYS}`, so configured native Cargo to
+  build and install using that target triple. Rerun these tasks to validate.
+- The next build reported the same obsolete `${UNPACKDIR}/git` source override
+  in Essos resource manager and iarmbus headers; removed both. BlueZ 5.48 also
+  failed compiling calls to readline 5.2's `rl_message()` because that header
+  exposes an old-style empty parameter declaration unless its stdarg feature
+  macros are selected. Added a version-specific patch to select the variadic
+  declaration; rerun the affected tasks to validate.
+- The latest `lib32-essos:do_unpack` failed the same Wrynose QA check for an
+  explicit `S = "${UNPACKDIR}/git"` assignment. Removed the override and rely
+  on BitBake's default unpack source directory; rerun `do_unpack` to validate.
+- The latest build found the same obsolete git `S` override in the RDK
+  GStreamer utility, HDMI CEC, IARM manager, and Device Settings header
+  recipes; removed those assignments. Assimp's miniz update patch was
+  truncated at its final hunk, which produced patch fuzz; restored the complete
+  upstream patch and verified it applies with zero fuzz. Cairo now fails
+  installed-vs-shipped QA because `libcairo-fdr.so` remains after removing
+  cairo-perf-utils; remove that unused module along with cairo-trace when trace
+  is disabled.
+- The latest `cargo-c-native` build passed Cargo's host-target probe and lock
+  parsing, then failed because `cargo-c` 0.10.21 embeds Cargo 0.95 and declares
+  Rust 1.92 as its minimum; its locked `time-core` also uses the Rust 2024
+  edition. An initial fallback to `cargo-c` 0.9.30 + Cargo 0.77 failed because
+  Cargo 0.77 requires rustc 1.73. Replaced that with `cargo-c` 0.9.27 + Cargo
+  0.74, whose crate metadata declares Rust 1.70, regenerated the crate include
+  from its version-3 lockfile, and retargeted the riscv32 patch to
+  `parking_lot_core` 0.9.8. Verified the release checksum and patch
+  applicability. The repeated `lib32-libstd-rs` log shows the target-spec file
+  is staged but Cargo's rustc probe still cannot resolve
+  `x86_64-linux`. Initially attempted to force `RUST_TARGET_PATH` using Cargo's
+  CLI config option, but the latest native cargo log shows inline tables are
+  not accepted there. Moved the forced environment setting into Cargo's
+  generated `config.toml`, where the `[env]` table syntax is supported; rerun
+  cargo-native and libstd to validate.
+- The latest `lib32-libstd-rs:do_install` failed after compilation succeeded:
+  the install function looked under `${B}/${TARGET_SYS}`, but Cargo writes
+  under `${B}/${CARGO_TARGET_SUBDIR}`. Updated the cleanup and copy paths to
+  use the shared Cargo target subdirectory. Confirmed it contains `libstd.rlib`
+  and that the previous target path does not exist; rerun do_install to validate.
+- The latest `rust-native:do_compile` failure is caused by duplicate
+  `[target.x86_64-unknown-linux-gnu]` tables in Cargo's legacy config. Rust's
+  setup appended its target table on each invocation, so changed it to
+  regenerate the config file before writing the linker entry. Rerun
+  `rust-native:do_compile` to validate.
+- The latest four failures are narrowed to three compatibility fixes and one
+  patch refresh. `westeros-sink:do_patch` still targeted `${UNPACKDIR}/git`
+  because a vendor dev-layer append overrode `S`; corrected that append to use
+  `${UNPACKDIR}/${BPN}-${PV}`. Refreshed the preferred-protection GStreamer
+  patch against its exact pre-patch source; its three hunks now apply without
+  fuzz. `cargo-c-native` was targeting
+  `x86_64-unknown-linux-gnu`, but this Rust 1.72 sysroot provides the native
+  standard library and target spec under `${BUILD_SYS}` (`x86_64-linux`).
+  Changed its native Cargo target and output subdirectory to `${BUILD_SYS}`.
+  Assimp 5.0.1 also needed `<cstdint>` enabled for the fixed-width types in
+  `FIReader.hpp`; the new patch applies to the preserved source. Rerun the
+  Westeros-sink patch, GStreamer patch, cargo-c compile, and Assimp compile to
+  validate in BitBake.
+- The subsequent `lib32-librsvg:do_configure` failed when Meson invoked
+  `cargo --version`: Cargo could not load `libssh2.so.1` from the recipe's
+  native sysroot. Added `${STAGING_LIBDIR_NATIVE}` to the exported loader path
+  in `cargo_common.bbclass`, covering direct Cargo probes during configure as
+  well as Cargo-dependent build tasks; rerun configure to validate.
+- The latest `lib32-vkmark:do_patch` failure came from its `S` path using
+  `${PN}`, which expands to `lib32-vkmark` under multilib while the unpacked
+  source is named `vkmark-git`; changed `S` to `${BPN}`. Assimp 5.0.1 also
+  failed compiling because `MMDPmxParser.h` uses fixed-width integer types
+  without including `<cstdint>`; added a focused header patch. Retry the
+  vkmark patch and Assimp compile tasks to validate.
+- The next `lib32-vkmark:do_configure` failure came from vkmark using the
+  `wayland-scanner` pkg-config value `/usr/bin/wayland-scanner`, which is a
+  target path rather than the native tool path. Updated vkmark to locate
+  `wayland-scanner` through the build task's native `PATH`.
+- The latest multilib configure failures for DisplayInfo, RDK GStreamer
+  utilities, and systemaudioplatform all came from legacy `${RPI_UNPACKDIR}/git`
+  source paths. Wrynose unpacks these repositories under
+  `${UNPACKDIR}/${BPN}-${PV}`; updated each recipe's `S`, preserving the
+  DisplayInfo and systemaudioplatform subdirectories where applicable. The
+  GStreamer utilities source uses a plain Makefile and has no `configure`
+  script, so removed the unused `autotools` class inheritance while retaining
+  its explicit Makefile build. Retry the three configure tasks to validate.
+- The next DisplayInfo and systemaudioplatform configure attempts reached their
+  source trees but CMake 4 rejected the projects' `cmake_minimum_required(3.3)`;
+  added `CMAKE_POLICY_VERSION_MINIMUM=3.5` to both recipes. Westeros-sink's
+  lib32 compile also failed because V4L2 ioctl request macros are unsigned
+  values wider than signed `int`; updated its debug wrapper to use `unsigned
+  int` for the request parameter and compare the S_FMT request without a
+  signed cast. The Westeros patch applies cleanly to the preserved source;
+  BitBake configure and compile retries are still needed to validate.
+- The latest `lib32-gstreamer1.0-plugins-good:do_compile` failure is caused by
+  GStreamer 1.18 using TagLib 1's `TagLib::uint` frame factory overload while
+  Wrynose provides TagLib 2.2.1, which instead accepts an ID3v2 header. Added
+  a TagLib-major-version conditional patch using the header API for TagLib 2
+  and preserving the old call for TagLib 1; retry compile to validate.
+- The latest `lib32-sysint-soc:do_install` failure came from its legacy
+  `${RPI_UNPACKDIR}/git` source path. The required unit exists under
+  `${UNPACKDIR}/${BPN}-${PV}/systemd_units`; updated `S` to that Wrynose
+  unpack path. Also fixed the reported missing whitespace around the
+  `tvsettings-hal-headers` `SRCREV` assignment.
+- The latest six HAL configure failures used `${RPI_UNPACKDIR}/git` although
+  their sources are unpacked under `${UNPACKDIR}/${BPN}-${PV}`; updated each
+  recipe's `S`. `westeros-sink` could not link `-lwesteros_compositor` because
+  the Westeros install append removed `${D}${base_libdir}`; removed that broad
+  deletion so the built compositor library remains available for sysroot and
+  packaging. Retry all seven tasks to validate.
+- The latest `librsvg` configure still could not load native Cargo's
+  `libssh2.so.1`; explicitly export the native library directory in its
+  configure task where Meson probes Cargo. The devicesettings configure lacked
+  the `libudev` pkg-config module, so added `systemd` to its build dependencies.
+  The glib-networking compile failure was a vendor patch passing a
+  `GTlsConnectionBase *` to a helper requiring `GTlsConnection *`; use the
+  concrete client connection cast. Westeros now packages its installed
+  systemd unit. Finally, pwrmgr's configure-unsafe QA stems from its configure
+  script using `PKG_CONFIG_SYSROOT_DIR` without inheriting the pkgconfig class;
+  added that class so the include paths resolve in the target sysroot.
+- The latest `mfrlibs` and `deepsleepmgr` compiles still used literal
+  `/usr/include/rdk/...` paths because their Autoconf recipes use
+  `PKG_CONFIG_SYSROOT_DIR` but did not inherit `pkgconfig`; added that class to
+  both recipes. `librsvg` 2.61.3 reaches Cargo's version check but requires
+  Rust 1.85.1 (`Cargo.toml` `rust-version`), newer than this build's toolchain.
+  Selected OE-Core `librsvg` 2.58.2 instead; its `rust-version` is 1.70.0 and
+  its locked crate set is provided with the matching recipe. The subsequent
+  2.58.2 configure attempt exposed another incompatibility: it requires Pango
+  1.50, while this build provides 1.44.7. The preference is now 2.50.7, whose
+  configure requirements are Pango >=1.44 and Rust >=1.40; its release archive
+  includes the Cargo vendor tree.
+- The new `lib32-librsvg:do_configure` reached `do_qa_configure`, which
+  rejected its `AM_GNU_GETTEXT` macros because the recipe did not inherit
+  `gettext`; added that class. `lib32-ffmpeg:do_create_spdx` could not resolve
+  the legacy `BSD` license identifier to an SPDX license text; replaced it
+  with the recognized `BSD-2-Clause` and `BSD-3-Clause` identifiers.
+- The subsequent `lib32-librsvg:do_compile` failed when Cargo could not load
+  `libssh2.so.1` from its native sysroot. Explicitly prepend
+  `${STAGING_LIBDIR_NATIVE}` to `LD_LIBRARY_PATH` in the compile task, matching
+  the earlier configure-time runtime-library fix. The next compile reached
+  rustc but could not find Rust's custom build-host target `x86_64-linux`;
+  stage the Rust compiler's installed `${BUILD_SYS}.json` specification into
+  librsvg's `RUST_TARGET_PATH` before invoking Cargo.
+- `lib32-mesa:do_populate_lic` reported an updated `docs/license.rst`
+  checksum; refreshed the checksum after confirming the source still identifies
+  the core Mesa license as MIT. The latest fontconfig license failure came from
+  its OSS `.bbappend`, which still overrode the updated base recipe checksums;
+  refreshed the three append checksums against the QA-reported source text.
 
 ## Historical build-triage log
 
@@ -207,7 +486,12 @@ the current build status above supersedes their interim status statements.
   `librsvg_2.40.21.bb` after the legacy PV overrides were removed; that recipe
   requires `libcroco`, which is not provided by the Wrynose layer set. Removed
   the packagegroup's obsolete direct `libcroco` dependency and explicitly set
-  `PREFERRED_VERSION_librsvg = "2.61.3"` to select OE-Core's compatible recipe.
+  `PREFERRED_VERSION_librsvg = "2.61.3"` initially selected OE-Core, but that
+  release requires Rust 1.85.1. Updated the preference to 2.58.2, but its Pango
+  1.50 minimum exceeds this build's Pango 1.44.7. The active preference is now
+  2.50.7, which supports the available Rust and Pango versions, after the next
+  parse selected the vendor 2.40.21 recipe and failed on its unavailable
+  `libcroco` dependency.
   The latest build advanced past that dependency and stopped because the
   Raspberry Pi Wi-Fi firmware's `synaptics-killswitch` license flag was not
   accepted. Accepted the flag in the product machine configuration only.
@@ -227,7 +511,94 @@ the current build status above supersedes their interim status statements.
   by OE-Core's kirkstone recipe and the downloaded official archive.
   The subsequent kernel-module build found another GCC 15 error in Btrfs:
   `kvcalloc()` arguments were reversed in `send.c`. Added a narrow kernel patch
-  to pass element count before element size.
+  to pass element count before element size. The next lib32 patch failure was
+  xkeyboard-config's remote color-key patch, which still used 2.11-era
+  keycode-file context; XD4 carries the same old patch, while the BPI reference
+  has no corresponding override. Rebased it against 2.47. The Cairo fetch
+  mismatch came from the vendor PV pin selecting cairo 1.16.0 while inheriting
+  the 1.18.4 checksum; added a matching vendor recipe append using the checksum
+  verified against OE-Core's dunfell 1.16.0 recipe. The BPI reference has no
+  cairo 1.16.0 version override.
+  The next run failed in fontconfig install because optional configuration
+  files were removed without `-f`; made those removals tolerate files absent
+  from fontconfig 2.17.1. Vala's multilib configure could not resolve the
+  introspection pkg-config module because its declared GLib minimum is 2.82.0
+  while the selected target GLib is 2.74.6. Set Vala's `GI_GIRDIR` override to
+  `${libdir}/gir-1.0` so the target library does not embed the staging sysroot;
+  keep the vapigen wrapper's GIR search path on `${STAGING_LIBDIR}` for builds.
+  The latest build failed configuring multilib `breakpad-wrapper` because the
+  recipe hardcoded `S` to `${UNPACKDIR}/git`, while BitBake unpacked the named
+  Git source under `sources/breakpad-wrapper-1.0.0`. Removed the stale `S`
+  assignment to use BitBake's default source directory, which contains the
+  recipe's `configure.ac` and `Makefile.am`.
+  The GStreamer 1.18.5 patch stack applied, but patch QA rejected the
+  tracer-hook patch for a missing `Upstream-Status`; marked it `Pending`
+  because it adds a GStreamer API change with no recorded upstream submission.
+  The subsequent lib32 libjpeg failure came from its custom unpack task
+  extracting into `${WORKDIR}` although `S` points into `${UNPACKDIR}`; aligned
+  the extraction destination with `S`. BlueZ 5.48 stores the firmware fallback
+  define in `hciattach_bcm43xx.c` rather than the newer `hciattach.h`, so ported
+  the Raspberry Pi firmware-path patch to the 5.48 source location.
+  The latest BlueZ 5.48 patch QA report found missing or malformed
+  `Upstream-Status` fields and six patches applying with fuzz. Added valid
+  statuses, matching XD4's OEM-specific classifications where applicable, and
+  refreshed the six hunks against their quilt preimages. All six patches pass
+  zero-fuzz dry-runs. The XD4 reference has the corresponding 5.48 patch set;
+  the BPI reference has no corresponding 5.48 patch set. The assistant could
+  not rerun BitBake's `do_patch` task because BitBake is unavailable in this
+  shell.
+  The next build reported a Westeros patch lookup failure because the recipe
+  pointed `S` at `${UNPACKDIR}/git`, while BitBake unpacked the source at
+  `${UNPACKDIR}/westeros-soc-drm-${PV}`. Corrected `S`; both resolution hunks
+  dry-run against that source with zero fuzz. Rust 1.72's snapshot installers
+  were likewise extracted under `${UNPACKDIR}/rust-snapshot-components`, while
+  its setup task searched `${WORKDIR}`. Updated the installer glob to use
+  `${UNPACKDIR}`, consistent with the newer XD4 OE-Core Rust recipe. The XD4
+  and BPI trees have no corresponding Westeros SoC recipe patch to compare.
+  GStreamer 1.18.5 then failed during Meson setup because target
+  gobject-introspection 1.86.0 requires GLib >=2.82.0, but the selected target
+  GLib is 2.74.6. Opted Raspberry Pi Wrynose out of
+  `gobject-introspection-data`, matching the XD4 RDK policy; the OE-Core
+  introspection class will disable GIR generation for this build.
+  Mesa 22.0.3 next rejected `-Dvulkan-manifest-per-architecture=false`,
+  an option supplied by the newer shared `mesa.inc` but absent from Mesa 22's
+  Meson options. Removed it conditionally in the Raspberry Pi Mesa append only
+  for the vendor-pinned 22.0.3 version; newer Mesa releases retain the option.
+  The next configure attempt then rejected `-Dexpat=enabled`, another newer
+  Mesa option. Mesa 22.0.3 finds expat unconditionally on Linux, so remove only
+  the unsupported PACKAGECONFIG flag for that version while retaining its
+  `expat` build dependency. Comparing the complete configure invocation with
+  Mesa 22.0.3's declared options found five more unsupported modern flags;
+  excluded those features for 22.0.3 only. Also translated the software
+  Gallium driver to Mesa 22's `swrast` name and the newer VirtIO Vulkan driver
+  list to Mesa 22's `virtio-experimental` name, removing unsupported
+  `gfxstream`. The XD4 reference uses the same newer Mesa metadata without the
+  Raspberry Pi 22.0.3 pin; no Mesa recipe override was found in the checked BPI
+  reference. The next Mesa configure attempt rejected `-Dglvnd=disabled`:
+  Mesa 22 declares `glvnd` as a boolean, while the newer shared metadata emits
+  `enabled`/`disabled`. Translate these values to `true`/`false` for Mesa
+  22.0.3 only. After that fix, Mesa's enabled Raspberry Pi drivers required
+  libdrm >=2.4.109, but the selected OSS recipe was 2.4.100. Updated the
+  preferred target and SDK libdrm versions to 2.4.131, the available OE-Core
+  recipe also used by the XD4 reference; the multilib preference mirrors to
+  `lib32-libdrm`. The next run exposed two independent recipe/source mismatches:
+  Westeros simpleshell's source is unpacked as
+  `westeros-simpleshell-${PV}/simpleshell`, not `git/simpleshell`; corrected
+  `S` so autotools can regenerate `configure` from its `configure.ac`.
+  Separately, Cairo 1.16.0 source was being passed to OE-Core's Cairo 1.18.4
+  Meson recipe, which expects `meson.build`. Aligned the Cairo vendor and
+  preferred versions to 1.18.4, matching the XD4 Wrynose preference, and
+  corrected the version-specific checksum to the 1.18.4 archive checksum.
+  The simplebuffer recipe had the same stale `${UNPACKDIR}/git/simplebuffer`
+  source path as simpleshell; changed it to the unpacked
+  `westeros-simplebuffer-${PV}/simplebuffer` directory.
+  The libjpeg-turbo 2.0.4 CMake project also uses a minimum version below 3.5;
+  pass `CMAKE_POLICY_VERSION_MINIMUM=3.5` as recommended by CMake 4, without
+  changing the package's declared minimum version.
+  Cargo 1.72's native snapshot setup similarly looked for the installer under
+  `${WORKDIR}`, while BitBake unpacked it under `${UNPACKDIR}/sources`.
+  Updated the installer path to `${UNPACKDIR}`; the install prefix and runtime
+  Cargo path remain unchanged.
 - Earlier blockers addressed during triage:
   - Replaced the removed `debug-tweaks` image feature with Wrynose's supported
     root-login/password features.
@@ -351,9 +722,12 @@ the current build status above supersedes their interim status statements.
   Perl's custom configure task actually uses, avoiding the incompatible
   `NDBM_File` build against GDBM 1.8.3 headers.
 - Removed the legacy `librsvg` 2.40.21 pins from the OSS and vendor
-  configurations, explicitly preferred OE-Core `librsvg` 2.61.3 to win over
-  the high-priority legacy recipe, and removed the unavailable `libcroco`
-  package from the OSS packagegroup.
+  configurations, initially preferring OE-Core `librsvg` 2.61.3 over the
+  high-priority legacy recipe. After that version failed the Rust toolchain
+  minimum, switched to OE-Core 2.58.2, but its Pango 1.50 minimum exceeded
+  Pango 1.44.7 in the build. The active preference is now OE-Core 2.50.7,
+  whose Rust and Pango minimums are compatible with the configured toolchain.
+  Also removed the unavailable `libcroco` package from the OSS packagegroup.
 - Accepted the Raspberry Pi Wi-Fi firmware's `synaptics-killswitch` license
   flag only in the RDKE Raspberry Pi product configuration, enabling the
   firmware dependency required by the platform packagegroup.

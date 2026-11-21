@@ -32,6 +32,11 @@ PREFERRED_VERSION_gettext-native:wrynose = "1.0"
 PREFERRED_VERSION_glib-2.0-native:wrynose = "2.88.2"
 PREFERRED_VERSION_tar-native:wrynose = "1.35"
 PREFERRED_VERSION_linux-libc-headers:wrynose = "6.18"
+# Keep Vulkan SDK native and target tools aligned with the selected glslang.
+PREFERRED_VERSION_spirv-headers:wrynose = "1.4.341.0"
+PREFERRED_VERSION_spirv-headers-native:wrynose = "1.4.341.0"
+PREFERRED_VERSION_spirv-tools:wrynose = "1.4.341.0"
+PREFERRED_VERSION_spirv-tools-native:wrynose = "1.4.341.0"
 DISTRO_FEATURES:remove:wrynose = " ssl-1.1.1"
 # Avoid systemd and libcgroup depending on each other's SPDX tasks.
 PACKAGECONFIG:remove:pn-libcgroup = "systemd"
@@ -55,6 +60,8 @@ DEFAULTTUNE:virtclass-multilib-lib32 = "armv7athf-neon-vfpv4"
 
 # Enabling this to solve syslog-ng packaging issue. Refer RDKCentral jira RDKE-14
 DISTRO_FEATURES_OPTED_OUT += "sysvinit"
+# Match the XD4 RDK policy; target GLib 2.74.6 is too old for g-i 1.86.0.
+DISTRO_FEATURES_OPTED_OUT += "gobject-introspection-data"
 VIRTUAL-RUNTIME_init_manager = "systemd"
 VIRTUAL-RUNTIME_initscripts = "systemd-compat-units"
 
